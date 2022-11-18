@@ -16,7 +16,7 @@ def detect_people(frame):
     npboxes = np.array([[x, y, x + w, y + h] for (x, y, w, h) in boxes])
 
     people = non_max_suppression(npboxes, probs=None, overlapThresh=0.65)
-    return people
+    return frame, people
 
 if __name__ == "__main__":
     video_capture = cv2.VideoCapture("videos/walking_pedestrians1.mp4")     # Open video capture object
@@ -35,25 +35,25 @@ if __name__ == "__main__":
 
     
     while True:
-        if cv2.getWindowProperty("CCC Video",cv2.WND_PROP_VISIBLE) < 1:   # If user presses 'X' on the window,      
+        if cv2.getWindowProperty(windowName,cv2.WND_PROP_VISIBLE) < 1:   # If user presses 'X' on the window,      
             cv2.destroyAllWindows()
             break
         
         if windowIsOpen:
+            
+            people, bgr_img_copy = detect_people(bgr_img_copy) 
+            for (xA, yA, xB, yB) in people:
+                cv2.rectangle(bgr_img_copy, (xA, yA), (xB, yB), (0, 255, 0), 2)
+            cv2.imshow(windowName, bgr_img_copy)
+
+            got_image, bgr_img = video_capture.read()
             bgr_img_copy = bgr_img.copy()
 
             if not got_image:
                 break
             
-            gotImage, backgroundImg = video_capture.read()
-                
-            if not gotImage: 
-                break # End of video; exit the while loop   
+            
         
             
-            people = detect_people(bgr_img_copy) 
-            for (xA, yA, xB, yB) in people:
-                cv2.rectangle(bgr_img_copy, (xA, yA), (xB, yB), (0, 255, 0), 2)
-            cv2.imshow(windowName, bgr_img_copy)
          
         cv2.waitKey(30)
