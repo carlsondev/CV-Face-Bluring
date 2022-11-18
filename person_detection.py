@@ -4,7 +4,6 @@ from imutils.object_detection import non_max_suppression
 import imutils
 import sys
 
-frame = cv2.imread("images/pedestrian2.jpg")
 
 def detect_people(frame):
     frame = imutils.resize(frame, width=min(400, frame.shape[1]))
@@ -20,30 +19,41 @@ def detect_people(frame):
     return people
 
 if __name__ == "__main__":
-    video_reader = cv2.VideoCapture("videos/pedestrian_walking1.mp4")
-
-    got_image, frame = video_reader.read()
+    video_capture = cv2.VideoCapture("videos/walking_pedestrians1.mp4")     # Open video capture object
+    got_image, bgr_img = video_capture.read()       # Make sure we can read video
 
     if not got_image:
-        print("cannot read video")
+        print("Cannot read video source")
         sys.exit()
+    bgr_img_copy = bgr_img.copy()
+    
+    # Start window thread
+    cv2.startWindowThread()                           
+    windowName = "FinalProject"
+    cv2.namedWindow(windowName)
+    windowIsOpen = True
+
     
     while True:
         if cv2.getWindowProperty("CCC Video",cv2.WND_PROP_VISIBLE) < 1:   # If user presses 'X' on the window,      
             cv2.destroyAllWindows()
             break
+        
+        if windowIsOpen:
+            bgr_img_copy = bgr_img.copy()
 
-        got_image, bgr_image = video_capture.read() 
-
-        if not got_image:
-            break
-
-
-        people = detect_people(frame)  
-
-for (xA, yA, xB, yB) in pick:
-    cv2.rectangle(frame, (xA, yA), (xB, yB), (0, 255, 0), 2)
-
-cv2.imshow("test", frame)
-
-cv2.waitKey(0)
+            if not got_image:
+                break
+            
+            gotImage, backgroundImg = video_capture.read()
+                
+            if not gotImage: 
+                break # End of video; exit the while loop   
+        
+            
+            people = detect_people(bgr_img_copy) 
+            for (xA, yA, xB, yB) in people:
+                cv2.rectangle(bgr_img_copy, (xA, yA), (xB, yB), (0, 255, 0), 2)
+            cv2.imshow(windowName, bgr_img_copy)
+         
+        cv2.waitKey(30)
