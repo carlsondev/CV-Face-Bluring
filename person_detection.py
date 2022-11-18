@@ -12,7 +12,7 @@ def detect_people(frame):
     hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
 
 
-    boxes, weights = hog.detectMultiScale(frame, winStride=(2,2), padding=(2,2), scale=1.20)
+    boxes, weights = hog.detectMultiScale(frame, winStride=(3,3), padding=(2,2), scale=1.3)
     npboxes = np.array([[x, y, x + w, y + h] for (x, y, w, h) in boxes])
 
     people = non_max_suppression(npboxes, probs=None, overlapThresh=0.65)
@@ -41,7 +41,7 @@ if __name__ == "__main__":
         
         if windowIsOpen:
             
-            people, bgr_img_copy = detect_people(bgr_img_copy) 
+            bgr_img_copy, people  = detect_people(bgr_img_copy) 
             for (xA, yA, xB, yB) in people:
                 cv2.rectangle(bgr_img_copy, (xA, yA), (xB, yB), (0, 255, 0), 2)
             cv2.imshow(windowName, bgr_img_copy)
