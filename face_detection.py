@@ -15,6 +15,16 @@ blur_kernel_size = (15, 15)
 
 
 def should_blur_face(body_img: np.ndarray, face_rect: RectType) -> bool:
+    """
+    Returns whether a specific face on a specific body should be blurred
+
+    :param body_img: The cropped image of the identified body
+    :type body_img: image
+    :param face_rect: The dimensions of the face in relation to the cropped image
+    :type face_rect: RectType aka (x, y, w, h)
+    :return: Whether the face should be blurred or not
+    :rtype: bool
+    """
     return True
 
 
@@ -46,14 +56,20 @@ def blur_faces(
             break
 
     # Get image area of the body matched with the face rect
-    body_img_faces = [
-        (temp_img[body[1] : body[1] + body[3], body[0] : body[0] + body[2]], face)
-        for (body, face) in filtered_body_faces
-    ]
+    body_img_faces: List[Tuple[np.ndarray, RectType, RectType]] = []
+    for (body, face) in filtered_body_faces:
+        body_x, body_y, body_w, body_h = body
+        face_x, face_y, face_w, face_h = face
+
+        body_img = temp_img[body_y : body_y + body_h, body_x : body_x + body_w]
+        relative_face = (face_x - body_x, face_y - body_y, face_w, face_h)
+        body_img_faces.append((body_img, relative_face, face))
 
     # Get only the faces that should be blurred
     blurring_face_rects = [
-        face for (body_img, face) in body_img_faces if should_blur_face(body_img, face)
+        face
+        for (body_img, rel_face, face) in body_img_faces
+        if should_blur_face(body_img, rel_face)
     ]
 
     for face_rect in blurring_face_rects:
