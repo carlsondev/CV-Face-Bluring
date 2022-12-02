@@ -7,7 +7,7 @@ from deepface.detectors import FaceDetector
 from yolo_person_detection import RectType
 
 backends = ["opencv", "ssd", "dlib", "mtcnn", "retinaface", "mediapipe"]
-selected_backend = backends[0]
+selected_backend = backends[4]
 
 face_detector = FaceDetector.build_model(selected_backend)
 
