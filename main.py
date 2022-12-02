@@ -56,6 +56,12 @@ def main():
     frame_count = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
     out = cv2.VideoWriter("out_small.mp4", fourcc, fps, (img_w, img_h))
 
+    est_min, est_s = get_minutes_seconds(2.5 * frame_count)
+
+    print(
+        f"File FPS: {fps}, Frame Count: {frame_count}, Est Max Time: {est_min}:{est_s}"
+    )
+
     if not got_image:
         print("Cannot read video source")
         exit(1)
@@ -88,9 +94,7 @@ def main():
         frame_comp_time_avg = sum(frame_comp_times) / len(frame_comp_times)
 
         # Predict the amount of time remaining
-        predicted_seconds_remaining = (
-            frame_count - current_frame_num
-        ) * frame_comp_time_avg
+        predicted_seconds_remaining = (frame_count) * frame_comp_time_avg
 
         pred_min, pred_s = get_minutes_seconds(predicted_seconds_remaining)
 
