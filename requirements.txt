@@ -1,4 +1,5 @@
+scikit-build
 numpy
 opencv-python
-imutils
 deepface
+tensorflow

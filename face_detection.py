@@ -11,18 +11,24 @@ selected_backend = backends[4]
 
 face_detector = FaceDetector.build_model(selected_backend)
 
-blur_kernel_size = (15, 15)
+blur_kernel_size = (51, 51)
+g_sigma = 15
 
-dilate_kernel = np.ones((15, 15), np.uint8)
-min_red_percent = 15
+dilate_kernel = np.ones((31, 31), np.uint8)
+min_red_percent = 10
+
+small_h = 20
+large_h = 160
+min_s = 200
+min_v = 50
 
 
 def should_blur_face(img_dilation: np.ndarray, face_rect: RectType) -> bool:
     """
     Returns whether a specific face on a specific body should be blurred
 
-    :param body_img: The cropped image of the identified body
-    :type body_img: image
+    :param img_dilation: The cropped image of the identified body (threshed and dilated)
+    :type img_dilation: image
     :param face_rect: The dimensions of the face in relation to the cropped image
     :type face_rect: RectType aka (x, y, w, h)
     :return: Whether the face should be blurred or not
@@ -39,50 +45,17 @@ def should_blur_face(img_dilation: np.ndarray, face_rect: RectType) -> bool:
     if len(contours) == 0:
         return False
 
-    areas_percents = [int((cv2.contourArea(c) / img_area) * 100) for c in contours]
+    areas_percents = [(cv2.contourArea(c) / img_area) * 100 for c in contours]
     for p in areas_percents:
-        print(f"Percentage: {p}%")
+        print(f"Red Percentage: {p:.2f}%")
     areas_percents = [p for p in areas_percents if p >= min_red_percent]
 
     if len(areas_percents) == 0:
         return False
 
-    print(f"Filtered Areas: {len(areas_percents)}")
+    print(f"Filtered Red Area Count: {len(areas_percents)}")
 
     return True
-
-
-small_h = 20
-large_h = 160
-min_s = 200
-min_v = 75
-
-
-def update_small_h(val):
-    global small_h
-    small_h = val
-    cv2.setTrackbarPos("Small H", "FinalProject", small_h)
-
-
-def update_large_h(val):
-    global large_h
-    large_h = val
-    cv2.setTrackbarPos("Large H", "FinalProject", large_h)
-
-
-def update_min_s(val):
-    global min_s
-    min_s = val
-    cv2.setTrackbarPos("Min S", "FinalProject", min_s)
-
-
-def update_min_v(val):
-    global min_v
-    min_v = val
-    cv2.setTrackbarPos("Min V", "FinalProject", min_v)
-
-
-created_trackbars = False
 
 
 def blur_faces(
@@ -94,19 +67,6 @@ def blur_faces(
 
     # Save the face matching with the body
     filtered_body_faces: List[Tuple[RectType, RectType]] = []
-
-    global small_h
-    global large_h
-    global min_s
-    global min_v
-    global created_trackbars
-
-    # if not created_trackbars:
-    #     cv2.createTrackbar("Small H", "FinalProject", small_h, 180, update_small_h)
-    #     cv2.createTrackbar("Large H", "FinalProject", large_h, 180, update_large_h)
-    #     cv2.createTrackbar("Min S", "FinalProject", min_s, 360, update_min_s)
-    #     cv2.createTrackbar("Min V", "FinalProject", min_v, 360, update_min_v)
-    #     created_trackbars = True
 
     for body in body_rects:
         body_x, body_y, body_w, body_h = body
@@ -136,9 +96,6 @@ def blur_faces(
     threshed = np.bitwise_or(threshed_min, threshed_max)
 
     threshed = cv2.dilate(threshed, dilate_kernel, iterations=1)
-
-    # cv2.imshow("HSV", threshed)
-    # cv2.waitKey(1)
 
     # Get image area of the body matched with the face rect
     body_img_faces: List[Tuple[np.ndarray, RectType, RectType]] = []
@@ -188,13 +145,15 @@ def blur_faces(
         temp_img[
             face_img_y : face_img_y + face_img_h,
             face_img_x : face_img_x + face_img_w,
-        ] = cv2.blur(face_img, blur_kernel_size)
+        ] = cv2.blur(
+            cv2.GaussianBlur(face_img, blur_kernel_size, g_sigma), blur_kernel_size
+        )
 
         # create the circle in the mask and in the temp_img, notice the one in the mask is full
         mask = cv2.circle(
             mask,
             (face_x + int(face_w // 2), face_y + int(face_h // 2)),
-            face_h,
+            face_h // 2,
             (255),
             -1,
         )

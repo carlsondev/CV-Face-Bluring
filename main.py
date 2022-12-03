@@ -2,7 +2,7 @@
 
 import numpy as np
 import cv2
-import imutils
+import tensorflow
 import time
 
 from typing import List, Tuple
@@ -27,7 +27,7 @@ def draw_rects(
         img = cv2.circle(
             img,
             (int(face_x + face_w // 2), int(face_y + face_h // 2)),
-            10,
+            1,
             (0, 0, 255),
             -1,
         )
@@ -42,62 +42,64 @@ def get_minutes_seconds(seconds: float) -> Tuple[int, int]:
     return time_min, time_s
 
 
-def main():
+def main(input_video_path: str, output_video_path: str):
 
-    video_capture = cv2.VideoCapture(
-        "videos/red_for_ed.mp4"
-    )  # Open video capture object
-
-    fps = video_capture.get(cv2.CAP_PROP_FPS)
-    frame_count = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
+    video_capture = cv2.VideoCapture(input_video_path)  # Open video capture object
 
     got_image, bgr_img = video_capture.read()  # Make sure we can read video
-
-    img_h, img_w, _ = bgr_img.shape
-
-    # fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    # out = cv2.VideoWriter("out_small.mp4", fourcc, fps, (img_w, img_h))
-
-    est_min, est_s = get_minutes_seconds(2.5 * frame_count)
-
-    print(
-        f"File FPS: {fps}, Frame Count: {frame_count}, Est Max Time: {est_min}:{est_s}"
-    )
 
     if not got_image:
         print("Cannot read video source")
         exit(1)
 
-    window_name = "FinalProject"
-    cv2.namedWindow(window_name)
-    window_is_open = True
+    # Create video output
+    fps = video_capture.get(cv2.CAP_PROP_FPS)
+    frame_count = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
+
+    img_h, img_w, _ = bgr_img.shape
+
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    out = cv2.VideoWriter(output_video_path, fourcc, fps, (img_w, img_h))
+
+    # Estimate the amount of time it will take to process.
+    # ~0.22 s/frame on cuda, 2.5 s/frame on CPU
+    start_avg = 0.22 if tensorflow.test.is_gpu_available() else 2.5
+    est_min, est_s = get_minutes_seconds(start_avg * frame_count)
+
+    print(
+        f"File FPS: {fps}, Frame Count: {frame_count}, Est Max Time: {est_min}:{est_s}"
+    )
 
     current_frame_num = 1
     program_start_time = time.time()
+
+    # Used for average. The time added when storing to a list is negligible
     frame_comp_times: List[float] = []
 
-    while window_is_open and got_image:
+    while got_image:
         start_time = time.time()
-        bgr_img = imutils.resize(bgr_img, width=700)
+
         print(f"Currently processing frame {current_frame_num}/{frame_count}")
         body_rects = get_person_rects(bgr_img)
 
         face_rects = get_face_rects(bgr_img)
 
-        print(f"Faces Size: {len(face_rects)}")
+        print(f"Faces Count: {len(face_rects)}")
 
         bgr_img = blur_faces(bgr_img, body_rects, face_rects)
-        bgr_img = draw_rects(bgr_img, body_rects, face_rects)
+
         end_time = time.time()
 
+        # Already calculated main computation time, add additional time for non-CV computations
         extra_start = time.time()
+
         # Compute the average computation time of every frame
         frame_comp_time = end_time - start_time
         frame_comp_times.append(frame_comp_time)
 
         frame_comp_time_avg = sum(frame_comp_times) / len(frame_comp_times)
 
-        # Predict the amount of time remaining
+        # Predict the total amount of time
         predicted_seconds_remaining = frame_count * frame_comp_time_avg
 
         pred_min, pred_s = get_minutes_seconds(predicted_seconds_remaining)
@@ -113,19 +115,22 @@ def main():
             f"Program execution time: {exec_time_min}:{exec_time_s:02}/{pred_min}:{pred_s:02}"
         )
 
+        # Add additional exec time.
         frame_comp_times[-1] += time.time() - extra_start
         print("-" * 100)
 
-        cv2.imshow(window_name, bgr_img)
+        cv2.imshow("Final Project", bgr_img)
         cv2.waitKey(1)
-        # out.write(bgr_img)
+
+        out.write(bgr_img)
         current_frame_num += 1
         got_image, bgr_img = video_capture.read()
 
+    print("Finished!")
     video_capture.release()
-    # out.release()
+    out.release()
     cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
-    main()
+    main("videos/red_for_ed.mp4", "out.mp4")
