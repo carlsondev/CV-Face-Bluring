@@ -13,8 +13,11 @@ face_detector = FaceDetector.build_model(selected_backend)
 
 blur_kernel_size = (15, 15)
 
+dilate_kernel = np.ones((15, 15), np.uint8)
+min_red_percent = 15
 
-def should_blur_face(body_img: np.ndarray, face_rect: RectType) -> bool:
+
+def should_blur_face(img_dilation: np.ndarray, face_rect: RectType) -> bool:
     """
     Returns whether a specific face on a specific body should be blurred
 
@@ -25,7 +28,61 @@ def should_blur_face(body_img: np.ndarray, face_rect: RectType) -> bool:
     :return: Whether the face should be blurred or not
     :rtype: bool
     """
+
+    img_area = img_dilation.shape[0] * img_dilation.shape[1]
+
+    contours, _ = cv2.findContours(
+        img_dilation,
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_NONE,
+    )
+    if len(contours) == 0:
+        return False
+
+    areas_percents = [int((cv2.contourArea(c) / img_area) * 100) for c in contours]
+    for p in areas_percents:
+        print(f"Percentage: {p}%")
+    areas_percents = [p for p in areas_percents if p >= min_red_percent]
+
+    if len(areas_percents) == 0:
+        return False
+
+    print(f"Filtered Areas: {len(areas_percents)}")
+
     return True
+
+
+small_h = 20
+large_h = 160
+min_s = 200
+min_v = 75
+
+
+def update_small_h(val):
+    global small_h
+    small_h = val
+    cv2.setTrackbarPos("Small H", "FinalProject", small_h)
+
+
+def update_large_h(val):
+    global large_h
+    large_h = val
+    cv2.setTrackbarPos("Large H", "FinalProject", large_h)
+
+
+def update_min_s(val):
+    global min_s
+    min_s = val
+    cv2.setTrackbarPos("Min S", "FinalProject", min_s)
+
+
+def update_min_v(val):
+    global min_v
+    min_v = val
+    cv2.setTrackbarPos("Min V", "FinalProject", min_v)
+
+
+created_trackbars = False
 
 
 def blur_faces(
@@ -38,16 +95,32 @@ def blur_faces(
     # Save the face matching with the body
     filtered_body_faces: List[Tuple[RectType, RectType]] = []
 
+    global small_h
+    global large_h
+    global min_s
+    global min_v
+    global created_trackbars
+
+    # if not created_trackbars:
+    #     cv2.createTrackbar("Small H", "FinalProject", small_h, 180, update_small_h)
+    #     cv2.createTrackbar("Large H", "FinalProject", large_h, 180, update_large_h)
+    #     cv2.createTrackbar("Min S", "FinalProject", min_s, 360, update_min_s)
+    #     cv2.createTrackbar("Min V", "FinalProject", min_v, 360, update_min_v)
+    #     created_trackbars = True
+
     for body in body_rects:
         body_x, body_y, body_w, body_h = body
 
         for face in face_rects:
             face_x, face_y, face_w, face_h = face
 
-            if (face_x < body_x) or ((face_x + face_w) > (body_x + body_w)):
+            face_cx = face_x + (face_w // 2)
+            face_cy = face_y + (face_h // 2)
+
+            if (face_cx < body_x) or (face_cx > (body_x + body_w)):
                 # If outside horizontal bounds, ignore
                 continue
-            if (face_y < body_y) or ((face_y + face_h) > (body_y + body_h)):
+            if (face_cy < body_y) or (face_cy > (body_y + body_h)):
                 # If outside vertical bounds, ignore
                 continue
 
@@ -55,13 +128,36 @@ def blur_faces(
             filtered_body_faces.append((body, face))
             break
 
+    hsv_img = cv2.cvtColor(bgr_img.copy(), cv2.COLOR_BGR2HSV)
+
+    threshed_min = cv2.inRange(hsv_img, (0, min_s, min_v), (small_h, 255, 255))
+    threshed_max = cv2.inRange(hsv_img, (large_h, min_s, min_v), (180, 255, 255))
+
+    threshed = np.bitwise_or(threshed_min, threshed_max)
+
+    threshed = cv2.dilate(threshed, dilate_kernel, iterations=1)
+
+    # cv2.imshow("HSV", threshed)
+    # cv2.waitKey(1)
+
     # Get image area of the body matched with the face rect
     body_img_faces: List[Tuple[np.ndarray, RectType, RectType]] = []
     for (body, face) in filtered_body_faces:
         body_x, body_y, body_w, body_h = body
         face_x, face_y, face_w, face_h = face
 
-        body_img = temp_img[body_y : body_y + body_h, body_x : body_x + body_w]
+        body_x = max(body_x, 0)
+        body_y = max(body_y, 0)
+        face_x = max(face_x, 0)
+        face_y = max(face_y, 0)
+
+        body_img = threshed[body_y : body_y + body_h, body_x : body_x + body_w]
+        # Ignore empty image
+        if 0 in body_img.shape:
+            continue
+        if sum(sum(body_img)) == 0:
+            continue
+
         relative_face = (face_x - body_x, face_y - body_y, face_w, face_h)
         body_img_faces.append((body_img, relative_face, face))
 

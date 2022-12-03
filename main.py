@@ -45,16 +45,18 @@ def get_minutes_seconds(seconds: float) -> Tuple[int, int]:
 def main():
 
     video_capture = cv2.VideoCapture(
-        "videos/walking_pedestrians1.mp4"
+        "videos/red_for_ed.mp4"
     )  # Open video capture object
+
+    fps = video_capture.get(cv2.CAP_PROP_FPS)
+    frame_count = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
+
     got_image, bgr_img = video_capture.read()  # Make sure we can read video
 
     img_h, img_w, _ = bgr_img.shape
 
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    fps = video_capture.get(cv2.CAP_PROP_FPS)
-    frame_count = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
-    out = cv2.VideoWriter("out_small.mp4", fourcc, fps, (img_w, img_h))
+    # fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    # out = cv2.VideoWriter("out_small.mp4", fourcc, fps, (img_w, img_h))
 
     est_min, est_s = get_minutes_seconds(2.5 * frame_count)
 
@@ -81,9 +83,11 @@ def main():
         body_rects = get_person_rects(bgr_img)
 
         face_rects = get_face_rects(bgr_img)
+
         print(f"Faces Size: {len(face_rects)}")
-        # bgr_img = draw_rects(bgr_img, body_rects, face_rects)
+
         bgr_img = blur_faces(bgr_img, body_rects, face_rects)
+        bgr_img = draw_rects(bgr_img, body_rects, face_rects)
         end_time = time.time()
 
         extra_start = time.time()
@@ -94,7 +98,7 @@ def main():
         frame_comp_time_avg = sum(frame_comp_times) / len(frame_comp_times)
 
         # Predict the amount of time remaining
-        predicted_seconds_remaining = (frame_count) * frame_comp_time_avg
+        predicted_seconds_remaining = frame_count * frame_comp_time_avg
 
         pred_min, pred_s = get_minutes_seconds(predicted_seconds_remaining)
 
@@ -102,25 +106,24 @@ def main():
         exec_time = end_time - program_start_time
         exec_time_min, exec_time_s = get_minutes_seconds(exec_time)
 
-        print(f"Frame #{current_frame_num} took {frame_comp_time:.2f} seconds")
+        print(
+            f"Frame #{current_frame_num} took {frame_comp_time:.2f} seconds. Average of {frame_comp_time_avg:.2f} seconds"
+        )
         print(
             f"Program execution time: {exec_time_min}:{exec_time_s:02}/{pred_min}:{pred_s:02}"
         )
 
         frame_comp_times[-1] += time.time() - extra_start
-        print("-" * 50)
+        print("-" * 100)
 
-        # cv2.imshow(window_name, bgr_img)
-        out.write(bgr_img)
+        cv2.imshow(window_name, bgr_img)
+        cv2.waitKey(1)
+        # out.write(bgr_img)
         current_frame_num += 1
         got_image, bgr_img = video_capture.read()
 
-        key = cv2.waitKey(1)
-        if key == ord("q"):
-            break
-
     video_capture.release()
-    out.release()
+    # out.release()
     cv2.destroyAllWindows()
 
 
