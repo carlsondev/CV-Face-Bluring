@@ -84,8 +84,8 @@ def blur_faces(
     for (body, face) in filtered_body_faces:
         body_x, body_y, body_w, body_h = body
         face_x, face_y, face_w, face_h = face
-        max(body_x, 0)
-        max(body_y, 0)
+        body_x = max(body_x, 0)
+        body_y = max(body_y, 0)
         body_img = temp_img[body_y: body_y + body_h, body_x: body_x + body_w]
         relative_face = (face_x - body_x, face_y - body_y, face_w, face_h)
         body_img_faces.append((body_img, relative_face, face))

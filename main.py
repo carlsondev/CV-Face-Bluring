@@ -4,6 +4,7 @@ import numpy as np
 import cv2
 import imutils
 import time
+import tensorflow
 
 from typing import List, Tuple
 
@@ -125,4 +126,5 @@ def main():
 
 
 if __name__ == "__main__":
+    print(tensorflow.test.is_gpu_available())
     main()
