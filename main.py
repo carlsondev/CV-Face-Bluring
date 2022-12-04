@@ -45,7 +45,7 @@ def get_minutes_seconds(seconds: float) -> Tuple[int, int]:
 def main():
 
     video_capture = cv2.VideoCapture(
-        "videos/walking_pedestrians1.mp4"
+        "videos/red_for_ed.mp4"
     )  # Open video capture object
     got_image, bgr_img = video_capture.read()  # Make sure we can read video
 
@@ -110,7 +110,7 @@ def main():
         frame_comp_times[-1] += time.time() - extra_start
         print("-" * 50)
 
-        # cv2.imshow(window_name, bgr_img)
+        cv2.imshow(window_name, bgr_img)
         out.write(bgr_img)
         current_frame_num += 1
         got_image, bgr_img = video_capture.read()

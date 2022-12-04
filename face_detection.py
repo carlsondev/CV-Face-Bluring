@@ -17,7 +17,6 @@ blur_kernel_size = (15, 15)
 def should_blur_face(body_img: np.ndarray, face_rect: RectType) -> bool:
     """
     Returns whether a specific face on a specific body should be blurred
-
     :param body_img: The cropped image of the identified body
     :type body_img: image
     :param face_rect: The dimensions of the face in relation to the cropped image
@@ -25,11 +24,36 @@ def should_blur_face(body_img: np.ndarray, face_rect: RectType) -> bool:
     :return: Whether the face should be blurred or not
     :rtype: bool
     """
-    return True
+    if body_img.size == 0:
+        print("no image")
+        return True
+    # Create a smaller image with just face
+    face_img = body_img[int(face_rect[1]):int(face_rect[1]) + int(face_rect[3]),
+               int(face_rect[0]):int(face_rect[0]) + int(face_rect[2])]
+    # Convert face and body images to hsv
+    hsv = cv2.cvtColor(body_img, cv2.COLOR_BGR2HSV)
+    hsv_face = cv2.cvtColor(face_img, cv2.COLOR_BGR2HSV)
+    # Take both images and keep red pixels
+    red = cv2.inRange(hsv, (0, 70, 50), (10, 255, 255))
+    red2 = cv2.inRange(hsv, (170, 70, 50), (180, 255, 255))
+    face = cv2.inRange(hsv_face, (0, 70, 50), (10, 255, 255))
+    face2 = cv2.inRange(hsv_face, (170, 70, 50), (180, 255, 255))
+    # Count red pixels in both images
+    face_count = np.sum(face == 255) + np.sum(face2 == 255)
+    red_count = np.sum(red == 255) + np.sum(red2 == 255)
+    # Subtract face pixels from red pixel count
+    red_count = red_count - face_count
+    h, w, c = body_img.shape
+    pix = h * w
+    # Determine the percentage of body that is red pixels
+    if red_count / pix >= 0.10:
+        return True
+    else:
+        return False
 
 
 def blur_faces(
-    bgr_img: np.ndarray, body_rects: List[RectType], face_rects: List[RectType]
+        bgr_img: np.ndarray, body_rects: List[RectType], face_rects: List[RectType]
 ) -> np.ndarray:
     temp_img = bgr_img.copy()
     mask_h, mask_w, _ = temp_img.shape
@@ -60,8 +84,9 @@ def blur_faces(
     for (body, face) in filtered_body_faces:
         body_x, body_y, body_w, body_h = body
         face_x, face_y, face_w, face_h = face
-
-        body_img = temp_img[body_y : body_y + body_h, body_x : body_x + body_w]
+        max(body_x, 0)
+        max(body_y, 0)
+        body_img = temp_img[body_y: body_y + body_h, body_x: body_x + body_w]
         relative_face = (face_x - body_x, face_y - body_y, face_w, face_h)
         body_img_faces.append((body_img, relative_face, face))
 
@@ -73,7 +98,6 @@ def blur_faces(
     ]
 
     for face_rect in blurring_face_rects:
-
         # Convert from float to int
         face_x, face_y, face_w, face_h = tuple(int(x) for x in face_rect)
 
@@ -84,14 +108,14 @@ def blur_faces(
         face_img_h = face_y + (2 * face_h)
 
         face_img = temp_img[
-            face_img_y : face_img_y + face_img_h,
-            face_img_x : face_img_x + face_img_w,
-        ]
+                   face_img_y: face_img_y + face_img_h,
+                   face_img_x: face_img_x + face_img_w,
+                   ]
 
         # Insert blur back into the image
         temp_img[
-            face_img_y : face_img_y + face_img_h,
-            face_img_x : face_img_x + face_img_w,
+        face_img_y: face_img_y + face_img_h,
+        face_img_x: face_img_x + face_img_w,
         ] = cv2.blur(face_img, blur_kernel_size)
 
         # create the circle in the mask and in the temp_img, notice the one in the mask is full
@@ -111,7 +135,6 @@ def blur_faces(
 
 
 def get_face_rects(img: np.ndarray) -> List[RectType]:
-
     ret_faces = FaceDetector.detect_faces(face_detector, selected_backend, img)
     ret_rects: List[RectType] = []
     for (face_img, face_region) in ret_faces:
