@@ -2,13 +2,23 @@
 
 import numpy as np
 import cv2
-import tensorflow
 import time
+import os
 
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 from yolo_person_detection import get_person_rects, RectType
-from face_detection import get_face_rects, blur_faces
+from face_detection import get_full_ssd_face_rects, blur_faces, detect_retina_faces
+
+use_retina_face_detect = False
+
+try:
+    from retinaface import RetinaFace
+    import tensorflow as tf
+
+    use_retina_face_detect = True
+except ImportError:
+    pass
 
 
 def draw_rects(
@@ -42,7 +52,14 @@ def get_minutes_seconds(seconds: float) -> Tuple[int, int]:
     return time_min, time_s
 
 
-def main(input_video_path: str, output_video_path: str):
+def main(input_video_path: str, output_video_path: str, extension: str = "mp4"):
+
+    if not os.path.exists(input_video_path):
+        print("Input file does not exist!")
+        return
+
+    if os.path.exists(os.path.join(output_video_path, extension)):
+        os.remove(output_video_path)
 
     video_capture = cv2.VideoCapture(input_video_path)  # Open video capture object
 
@@ -59,11 +76,25 @@ def main(input_video_path: str, output_video_path: str):
     img_h, img_w, _ = bgr_img.shape
 
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    out = cv2.VideoWriter(output_video_path, fourcc, fps, (img_w, img_h))
+    out = cv2.VideoWriter(
+        os.path.join(output_video_path, extension), fourcc, fps, (img_w, img_h)
+    )
+
+    retina_out: Optional[cv2.VideoWriter] = None
+
+    if use_retina_face_detect:
+        retina_out = cv2.VideoWriter(
+            os.path.join(output_video_path + "retina", extension),
+            fourcc,
+            fps,
+            (img_w, img_h),
+        )
 
     # Estimate the amount of time it will take to process.
     # ~0.22 s/frame on cuda, 2.5 s/frame on CPU
-    start_avg = 0.22 if tensorflow.test.is_gpu_available() else 2.5
+    start_avg = 0.25
+    if use_retina_face_detect and tf.test.is_gpu_available():
+        start_avg = 0.25
     est_min, est_s = get_minutes_seconds(start_avg * frame_count)
 
     print(
@@ -82,11 +113,19 @@ def main(input_video_path: str, output_video_path: str):
         print(f"Currently processing frame {current_frame_num}/{frame_count}")
         body_rects = get_person_rects(bgr_img)
 
-        face_rects = get_face_rects(bgr_img)
+        ssd_face_rects = get_full_ssd_face_rects(bgr_img)
+        retina_face_rects = []
+        if use_retina_face_detect:
+            retina_face_rects = detect_retina_faces(bgr_img)
 
-        print(f"Faces Count: {len(face_rects)}")
+        print(f"Faces Count: {len(ssd_face_rects)}")
 
-        bgr_img = blur_faces(bgr_img, body_rects, face_rects)
+        bgr_img = blur_faces(bgr_img, body_rects, ssd_face_rects)
+        retina_face_bgr_img: Optional[np.ndarray] = None
+        if use_retina_face_detect:
+            retina_face_bgr_img = blur_faces(
+                bgr_img.copy(), body_rects, retina_face_rects
+            )
 
         end_time = time.time()
 
@@ -119,7 +158,10 @@ def main(input_video_path: str, output_video_path: str):
         frame_comp_times[-1] += time.time() - extra_start
         print("-" * 100)
 
-        cv2.imshow("Final Project", bgr_img)
+        cv2.imshow("SSD Face Video", bgr_img)
+        if use_retina_face_detect:
+            cv2.imshow("Retina Face Video", retina_face_bgr_img)
+            retina_out.write(retina_face_bgr_img)
         cv2.waitKey(1)
 
         out.write(bgr_img)
@@ -129,6 +171,8 @@ def main(input_video_path: str, output_video_path: str):
     print("Finished!")
     video_capture.release()
     out.release()
+    if use_retina_face_detect:
+        retina_out.release()
     cv2.destroyAllWindows()
 
 

@@ -2,14 +2,13 @@ import numpy as np
 import cv2
 
 from typing import List, Tuple
-from deepface.detectors import FaceDetector
 
 from yolo_person_detection import RectType
 
-backends = ["opencv", "ssd", "dlib", "mtcnn", "retinaface", "mediapipe"]
-selected_backend = backends[4]
-
-face_detector = FaceDetector.build_model(selected_backend)
+try:
+    from retinaface import RetinaFace
+except ImportError:
+    pass
 
 blur_kernel_size = (51, 51)
 g_sigma = 15
@@ -21,6 +20,12 @@ small_h = 20
 large_h = 160
 min_s = 200
 min_v = 50
+
+
+ssd_face_detector = cv2.dnn.readNetFromCaffe(
+    "./ssd_weights/deploy.prototxt",
+    "./ssd_weights/res10_300x300_ssd_iter_140000.caffemodel",
+)
 
 
 def should_blur_face(img_dilation: np.ndarray, face_rect: RectType) -> bool:
@@ -165,12 +170,128 @@ def blur_faces(
     return combined
 
 
-def get_face_rects(img: np.ndarray) -> List[RectType]:
+def detect_retina_faces(img: np.ndarray) -> List[RectType]:
 
-    ret_faces = FaceDetector.detect_faces(face_detector, selected_backend, img)
+    obj = RetinaFace.detect_faces(img)
+
+    if type(obj) != dict:
+        return []
+
+    rect_list: List[RectType] = []
+
+    for key in obj:
+        identity = obj[key]
+        facial_area = identity["facial_area"]
+
+        x = facial_area[0]
+        y = facial_area[1]
+        w = facial_area[2] - x
+        h = facial_area[3] - y
+
+        confidence = identity["score"]
+
+        rect_list.append((x, y, w, h))
+
+    return rect_list
+
+
+def detect_ssd_faces(img: np.ndarray, confidence: float) -> List[RectType]:
+
+    size = img.shape
+    transformed_size = (300, 300)
+
+    img = cv2.resize(img, transformed_size)
+
+    aspect_x = size[1] / transformed_size[1]
+    aspect_y = size[0] / transformed_size[0]
+
+    blob = cv2.dnn.blobFromImage(image=img)
+
+    ssd_face_detector.setInput(blob)
+    ssd_rets = ssd_face_detector.forward()
+
+    try:
+        detections = ssd_rets[0][0]
+        detection_count = ssd_rets.shape[2]
+    except IndexError:
+        return []
+
     ret_rects: List[RectType] = []
-    for (face_img, face_region) in ret_faces:
-        region = [float(x) for x in face_region]
-        ret_rects.append((region[0], region[1], region[2], region[3]))
+
+    for i in range(detection_count):
+        obj_data: np.ndarray = detections[i]
+
+        # If object is not a face, ignore
+        if int(obj_data[1]) != 1:
+            continue
+
+        # If confidence is less than the given value, ignore
+        if obj_data[2] < confidence:
+            continue
+
+        left, top, right, bottom = tuple(obj_data[3:7] * 300)
+
+        rect = (
+            int(left * aspect_x),
+            int(top * aspect_y),
+            int(right * aspect_x) - int(left * aspect_x),
+            int(bottom * aspect_y) - int(top * aspect_y),
+        )
+
+        ret_rects.append(rect)
+
+    return ret_rects
+
+
+def segment_image(img: np.ndarray, segment_count: int) -> Tuple[int, List[RectType]]:
+
+    img_h, img_w, _ = img.shape
+    # Generate image rects
+    img_rects: List[RectType] = []
+
+    x_seg_w = img_w // segment_count
+    y_seg_h = img_h // segment_count
+
+    for x_seg_idx in range(segment_count):
+        curr_seg_x = x_seg_idx * x_seg_w
+        current_seg_w = (img_w - curr_seg_x) - (
+            (segment_count - x_seg_idx - 1) * x_seg_w
+        )
+
+        for y_seg_idx in range(segment_count):
+            curr_seg_y = y_seg_idx * y_seg_h
+            current_seg_h = (img_h - curr_seg_y) - (
+                (segment_count - y_seg_idx - 1) * y_seg_h
+            )
+            img_rects.append((curr_seg_x, curr_seg_y, current_seg_w, current_seg_h))
+
+    return segment_count, img_rects
+
+
+def get_full_ssd_face_rects(img: np.ndarray) -> List[RectType]:
+
+    seg_img_rects: List[Tuple[int, List[RectType]]] = [
+        segment_image(img, 2),
+        segment_image(img, 3),
+    ]
+
+    ret_rects: List[RectType] = detect_ssd_faces(img, 0.8)
+    for (seg_count, img_rects) in seg_img_rects:
+        for (x, y, w, h) in img_rects:
+            img_section = img[y : y + h, x : x + w]
+            faces = detect_ssd_faces(img_section, 0.9)
+            for (face_x, face_y, face_w, face_h) in faces:
+
+                # Transform back to full space
+                wh_mult = seg_count / 2
+                xy_delta = (wh_mult - 1) / 2
+                ret_rects.append(
+                    (
+                        face_x + x - (face_w * xy_delta),
+                        face_y + y - (face_h * xy_delta),
+                        face_w * wh_mult,
+                        face_h * wh_mult,
+                    )
+                )
 
     return ret_rects

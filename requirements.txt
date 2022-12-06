@@ -1,5 +1,4 @@
-scikit-build
 numpy
 opencv-python
-deepface
 tensorflow
+retina-face
