@@ -12,6 +12,7 @@ person_labels_idx = 0
 RectType = Tuple[float, float, float, float]
 
 
+# Setup YOLO model
 def _setup_model() -> Tuple[Any, List[str]]:
 
     model = cv2.dnn.readNetFromDarknet(_config_path, _weights_path)
@@ -27,8 +28,16 @@ yolo_model, yolo_layer_name = _setup_model()
 
 
 def get_person_rects(
-    image: np.ndarray, NMS_THRESHOLD: float = 0.3, MIN_CONFIDENCE: float = 0.2
+    image: np.ndarray, NMS_THRESHOLD: float = 0.3, MIN_CONFIDENCE: float = 0.7
 ) -> List[RectType]:
+    """
+    Get body rects in the given image
+
+    :param image: The image to detect
+    :param NMS_THRESHOLD: Non-Max suppression threshold
+    :param MIN_CONFIDENCE: Minimum confidence
+    :return: List of body bounding boxes
+    """
     h, w = image.shape[:2]
 
     blob = cv2.dnn.blobFromImage(image, 1 / 255.0, (416, 416), swapRB=True, crop=False)

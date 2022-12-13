@@ -16,7 +16,7 @@ try:
     from retinaface import RetinaFace
     import tensorflow as tf
 
-    use_retina_face_detect = True
+    use_retina_face_detect = False
 except ImportError:
     pass
 
@@ -24,7 +24,13 @@ except ImportError:
 def draw_rects(
     bgr_img: np.ndarray, body_rects: List[RectType], face_rects: List[RectType]
 ) -> np.ndarray:
-
+    """
+    Optional method to draw body bounding rectangles and face circles
+    :param bgr_img: Image to draw upon
+    :param body_rects: List of body rects
+    :param face_rects: List of face rects
+    :return: Drawn image
+    """
     img = bgr_img.copy()
 
     for body in body_rects:
@@ -46,6 +52,12 @@ def draw_rects(
 
 
 def get_minutes_seconds(seconds: float) -> Tuple[int, int]:
+    """
+    Convert seconds to minutes and remainder seconds
+
+    :param seconds: Seconds to convert
+    :return: (minutes, seconds)
+    """
     time_min = int(seconds // 60)
     time_s = int(seconds - (60 * time_min))
 

@@ -33,9 +33,6 @@ def should_blur_face(img_dilation: np.ndarray) -> bool:
     Returns whether a specific face on a specific body should be blurred
 
     :param img_dilation: The cropped image of the identified body (threshed and dilated)
-    :type img_dilation: image
-    :param face_rect: The dimensions of the face in relation to the cropped image
-    :type face_rect: RectType aka (x, y, w, h)
     :return: Whether the face should be blurred or not
     :rtype: bool
     """
@@ -66,7 +63,14 @@ def should_blur_face(img_dilation: np.ndarray) -> bool:
 def blur_face(
     img: np.ndarray, mask: np.ndarray, face_rect: RectType
 ) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    "Blur" one face. Editing the image and the mask
 
+    :param img: Image to write the blur on
+    :param mask: Mask to write the circle to
+    :param face_rect: The face bounding box to blur
+    :return: The modified (img, mask)
+    """
     x, y, w, h = tuple(int(x) for x in face_rect)
 
     # takeout image to blur (2x size, but x and y cannot be less than 0)
@@ -101,6 +105,14 @@ def blur_face(
 def blur_faces(
     bgr_img: np.ndarray, body_rects: List[RectType], face_rects: List[RectType]
 ) -> np.ndarray:
+    """
+    Blur the faces that match bodies and should be blurred.
+
+    :param bgr_img: Image to blur
+    :param body_rects: Body bounding boxes
+    :param face_rects: Face bounding boxes
+    :return: Blurred final image
+    """
     temp_img = bgr_img.copy()
     mask_h, mask_w, _ = temp_img.shape
     mask = np.full((mask_h, mask_w, 1), 0, dtype=np.uint8)
@@ -130,6 +142,7 @@ def blur_faces(
 
     hsv_img = cv2.cvtColor(bgr_img.copy(), cv2.COLOR_BGR2HSV)
 
+    # Threshold image for red on both ends of the "v spectrum".
     threshed_min = cv2.inRange(hsv_img, (0, min_s, min_v), (small_h, 255, 255))
     threshed_max = cv2.inRange(hsv_img, (large_h, min_s, min_v), (180, 255, 255))
 
@@ -168,7 +181,12 @@ def blur_faces(
 
 
 def detect_retina_faces(img: np.ndarray) -> List[RectType]:
+    """
+    Detect face bounding boxes with RetinaFace
 
+    :param img: Image to detect
+    :return: List of detected faces
+    """
     obj = RetinaFace.detect_faces(img)
 
     if type(obj) != dict:
@@ -193,7 +211,13 @@ def detect_retina_faces(img: np.ndarray) -> List[RectType]:
 
 
 def detect_ssd_faces(img: np.ndarray, confidence: float) -> List[RectType]:
+    """
+    Detect faces in image with a minimum confidence
 
+    :param img: Image to detect
+    :param confidence: Minimum confidence of detections
+    :return: List of detected face bounding boxes
+    """
     size = img.shape
     transformed_size = (300, 300)
 
@@ -243,7 +267,13 @@ def detect_ssd_faces(img: np.ndarray, confidence: float) -> List[RectType]:
 def segment_image(
     img_shape: Tuple[float, float], segment_count: int
 ) -> Tuple[int, List[RectType]]:
+    """
+    Generate rects for sections separating the image into nxn sections
 
+    :param img_shape: (w, h) shape of the image
+    :param segment_count: N segment count.
+    :return: NxN list of rects for sections of the image
+    """
     img_w, img_h = img_shape
     # Generate image rects
     img_rects: List[RectType] = []
@@ -271,7 +301,14 @@ seg_img_rects: List[Tuple[int, List[RectType]]] = []
 
 
 def get_full_ssd_face_rects(img: np.ndarray) -> List[RectType]:
+    """
+    Separates the image into 1, 4, and 9 sections, detecting the faces using SSD in all of those sections.
 
+    :param img: Image to detect
+    :return: List of detected face bounding boxes
+    """
+
+    # Get image segment rects
     global seg_img_rects
     if len(seg_img_rects) == 0:
         img_h, img_w, _ = img.shape
@@ -286,6 +323,8 @@ def get_full_ssd_face_rects(img: np.ndarray) -> List[RectType]:
     for (seg_count, img_rects) in seg_img_rects:
         for (x, y, w, h) in img_rects:
             img_section = img[y : y + h, x : x + w]
+
+            # Detect faces in section of image
             faces = detect_ssd_faces(img_section, 0.9)
             for (face_x, face_y, face_w, face_h) in faces:
 
