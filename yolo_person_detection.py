@@ -13,7 +13,9 @@ RectType = Tuple[float, float, float, float]
 
 
 def _setup_model() -> Tuple[Any, List[str]]:
+
     model = cv2.dnn.readNetFromDarknet(_config_path, _weights_path)
+    model.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
 
     layer_name = model.getLayerNames()
     layer_name = [layer_name[i - 1] for i in model.getUnconnectedOutLayers()]
